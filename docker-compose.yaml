@@ -1,0 +1,77 @@
+version: "3.7"
+services:
+
+  gateway-frontends:
+    build:
+      context: .
+      dockerfile: Dockerfile-frontenvoy
+    networks:
+    - frontend-envoymesh
+    - backend-envoymesh
+    ports:
+    - "8000:8000"
+    - "8001:8001"
+    - "9901:9901"
+
+  gateway-backends:
+    build:
+      context: .
+      dockerfile: Dockerfile-backendenvoy
+    networks:
+    - frontend-envoymesh
+    - backend-envoymesh
+    ports:
+    - "9000:9000"
+    - "8011:8001"
+
+  service1:
+    build:
+      context: .
+      dockerfile: Dockerfile-service
+    networks:
+    - frontend-envoymesh
+    environment:
+    - SERVICE_NAME=shops.web-vip
+
+  service2:
+    build:
+      context: .
+      dockerfile: Dockerfile-service
+    networks:
+    - backend-envoymesh
+    environment:
+    - SERVICE_NAME=read.items-middleend
+
+  service3:
+    build:
+      context: .
+      dockerfile: Dockerfile-service
+    networks:
+    - backend-envoymesh
+    environment:
+    - SERVICE_NAME=read.items-api
+
+  jaeger:
+    image: jaegertracing/all-in-one
+    environment:
+    - COLLECTOR_ZIPKIN_HOST_PORT=9411
+    networks:
+    - frontend-envoymesh
+    - backend-envoymesh
+    ports:
+    - "16686:16686"
+
+  otel:
+    image: otel/opentelemetry-collector-contrib
+    networks:
+    - frontend-envoymesh
+    - backend-envoymesh
+    ports:
+    - "9411:9411"
+    - "4317:4317"
+    volumes:
+    - "${PWD}/otel-config.yaml:/etc/otel/config.yaml"
+
+networks:
+  frontend-envoymesh: {}
+  backend-envoymesh: {}

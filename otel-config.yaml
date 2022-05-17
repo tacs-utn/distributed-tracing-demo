@@ -1,0 +1,102 @@
+receivers:
+  zipkin:
+
+  otlp:
+    protocols:
+      grpc:
+      http:
+
+processors:
+  batch:
+
+  span/extract_name:
+    name:
+      to_attributes:
+        rules:
+          - "(?P<tmp_service_name>.*?)$"
+
+  attributes/setup:
+    actions:
+      - key: service.name
+        action: upsert
+        from_attribute: tmp_service_name
+
+      - key: tmp_service_name
+        action: extract
+        pattern: ^(?P<span_name>.+)\.(?P<tmp_traffic_suffix>traffic)$
+
+  groupbyattrs:
+    keys:
+      - service.name
+
+  span/set_name:
+    name:
+      from_attributes: ["http.method", "tmp_service_name"]
+      separator: " "
+
+  attributes/cleanup:
+    actions:
+      - key: tmp_service_name
+        action: delete
+
+      - key: tmp_traffic_suffix
+        action: delete
+
+  resource/setup_distributed:
+    attributes:
+      - key: service.name
+        action: extract
+        pattern: ^(?P<platform_service>[\w\-]+)\.(?P<platform_application>[\w\-]+)$
+
+      - key: platform.application
+        action: insert
+        from_attribute: platform_application
+
+      - key: platform.service
+        action: insert
+        from_attribute: platform_service
+
+      - key: platform_application
+        action: delete
+
+      - key: platform_service
+        action: delete
+
+exporters:
+  logging:
+    loglevel: debug
+
+  jaeger:
+    endpoint: jaeger:14250
+    tls:
+      insecure: true
+
+extensions:
+  health_check:
+
+  pprof:
+    endpoint: :1888
+
+  zpages:
+    endpoint: :55679
+
+service:
+  extensions: [pprof, zpages, health_check]
+
+  pipelines:
+    traces/envoy:
+      receivers: [zipkin]
+      processors:
+        - span/extract_name
+        - attributes/setup
+        - groupbyattrs
+        - span/set_name
+        - attributes/cleanup
+        - resource/setup_distributed
+        - batch
+      exporters: [jaeger]
+
+    traces/service:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [jaeger]

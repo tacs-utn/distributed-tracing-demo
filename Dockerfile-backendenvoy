@@ -1,0 +1,5 @@
+FROM envoyproxy/envoy-dev:889769e6446672b4f58465f09e2c9d3f171747f7
+
+COPY ./backend-envoy-jaeger.yaml /etc/front-envoy.yaml
+RUN chmod go+r /etc/front-envoy.yaml
+CMD ["/usr/local/bin/envoy", "-c", "/etc/front-envoy.yaml", "--service-cluster", "internal.myapp.com"]
